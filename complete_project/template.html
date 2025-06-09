@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VendorSync Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .toast { display: none; position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; z-index: 1000; }
+        .toast-success { background-color: #10b981; color: white; }
+        .toast-error { background-color: #ef4444; color: white; }
+        .highlight-row { background-color: #e0f2fe; transition: background-color 2s; }
+        .spinner { display: none; border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .email-content { white-space: pre-wrap; }
+        .tab-button.active { background-color: #3b82f6; color: white; }
+        .tab-button:hover:not(.active) { background-color: #e5e7eb; }
+        .dialog-box { max-height: 400px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Top Bar -->
+    <header class="bg-blue-600 text-white p-4 shadow-md">
+        <div class="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h1 class="text-2xl font-bold">VendorSync Dashboard</h1>
+            <div class="flex gap-4">
+                <button onclick="runWorkflow()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 flex items-center" aria-label="Run workflow">
+                    <span id="workflowSpinner" class="spinner mr-2"></span>
+                    Run Workflow
+                </button>
+                <button onclick="fetchCsvData()" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400" aria-label="Refresh CSV">Refresh CSV</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container mx-auto p-6">
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 mb-6">
+            <button id="tab-vendor" class="tab-button flex-1 py-3 px-4 text-gray-700 font-semibold text-center rounded-t-lg focus:outline-none active" onclick="switchTab('vendor')" aria-selected="true" role="tab">Vendor Database</button>
+            <button id="tab-emails" class="tab-button flex-1 py-3 px-4 text-gray-700 font-semibold text-center rounded-t-lg focus:outline-none" onclick="switchTab('emails')" aria-selected="false" role="tab">Generated Emails</button>
+            <button id="tab-submit" class="tab-button flex-1 py-3 px-4 text-gray-700 font-semibold text-center rounded-t-lg focus:outline-none" onclick="switchTab('submit')" aria-selected="false" role="tab">Submit Vendor Emails</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div id="tab-content-vendor" class="tab-content">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Vendor Database</h2>
+                <div class="text-sm text-gray-600 mb-2">Last Updated: <span id="lastUpdated">Loading...</span></div>
+                <div class="overflow-x-auto">
+                    <table id="csvTable" class="w-full border-collapse border border-gray-300">
+                        <thead>
+                            <tr class="bg-blue-100">
+                                <th class="border border-gray-300 p-3 text-left text-gray-700">Vendor ID</th>
+                                <th class="border border-gray-300 p-3 text-left text-gray-700">Vendor Name</th>
+                                <th class="border border-gray-300 p-3 text-left text-gray-700">Bank Account</th>
+                                <th class="border border-gray-300 p-3 text-left text-gray-700">Address</th>
+                                <th class="border border-gray-300 p-3 text-left text-gray-700">Name</th>
+                                <th class="border border-gray-300 p-3 text-left text-gray-700">Email</th>
+                                <th class="border border-gray-300 p-3 text-left text-gray-700">Phone Number</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-content-emails" class="tab-content hidden">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Generated Emails</h2>
+                <div id="generatedEmails" class="w-full p-4 border border-gray-300 rounded-lg bg-gray-50 dialog-box" aria-live="polite">No emails generated yet...</div>
+                <h2 class="text-xl font-semibold mt-6 mb-4 text-gray-800">Update Status</h2>
+                <div id="updateStatusEmails" class="w-full h-48 p-3 border border-gray-300 rounded-lg bg-gray-50 overflow-y-auto" aria-live="polite">Waiting for updates...</div>
+            </div>
+        </div>
+
+        <div id="tab-content-submit" class="tab-content hidden">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Submit Vendor Email</h2>
+                <textarea id="emailInput" class="w-full h-32 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="Enter vendor email content (e.g., Subject: Update Vendor Information
+Vendor ID: 123
+Please update our phone number to 5559876543)" aria-label="Email input"></textarea>
+                <button onclick="submitEmail()" class="mt-3 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 flex items-center" aria-label="Submit email">
+                    <span id="emailSpinner" class="spinner mr-2"></span>
+                    Submit Email
+                </button>
+                <h2 class="text-xl font-semibold mt-6 mb-4 text-gray-800">Update Status</h2>
+                <div id="updateStatusSubmit" class="w-full h-48 p-3 border border-gray-300 rounded-lg bg-gray-50 overflow-y-auto" aria-live="polite">Waiting for updates...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Utility to show toast notifications
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.remove('toast-success', 'toast-error');
+            toast.classList.add(type === 'success' ? 'toast-success' : 'toast-error');
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+
+        // Show/hide spinner
+        function toggleSpinner(id, show) {
+            document.getElementById(id).style.display = show ? 'inline-block' : 'none';
+        }
+
+        // Switch tabs
+        function switchTab(tab) {
+            const tabs = ['vendor', 'emails', 'submit'];
+            tabs.forEach(t => {
+                document.getElementById(`tab-${t}`).classList.remove('active');
+                document.getElementById(`tab-content-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).setAttribute('aria-selected', 'false');
+            });
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            document.getElementById(`tab-content-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).setAttribute('aria-selected', 'true');
+        }
+
+        // Fetch and display CSV data
+        async function fetchCsvData() {
+            try {
+                const response = await fetch('/get-csv');
+                const data = await response.json();
+                if (data.error) {
+                    showToast('Error fetching CSV: ' + data.error, 'error');
+                    return;
+                }
+                const tableBody = document.querySelector('#csvTable tbody');
+                tableBody.innerHTML = '';
+                (data.data || []).forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="border border-gray-300 p-3">${row['Vendor_ID'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Vendor_Name'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Bank_Account'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Address'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Name'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Email'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Phone_Number'] || ''}</td>
+                    `;
+                    tableBody.appendChild(tr);
+                });
+                document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
+            } catch (error) {
+                showToast('Error fetching CSV data: ' + error, 'error');
+            }
+        }
+
+        // Submit email content
+        async function submitEmail() {
+            const emailContent = document.querySelector('#emailInput').value.trim();
+            if (!emailContent) {
+                showToast('Email content cannot be empty', 'error');
+                return;
+            }
+            toggleSpinner('emailSpinner', true);
+            try {
+                const response = await fetch('/submit-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email_content: emailContent })
+                });
+                const result = await response.json();
+                if (result.error) {
+                    showToast('Error: ' + result.error, 'error');
+                } else {
+                    showToast(result.message, 'success');
+                    document.querySelector('#emailInput').value = '';
+                }
+            } catch (error) {
+                showToast('Error submitting email: ' + error, 'error');
+            } finally {
+                toggleSpinner('emailSpinner', false);
+            }
+        }
+
+        // Run workflow and update generated emails
+        async function runWorkflow() {
+            toggleSpinner('workflowSpinner', true);
+            try {
+                const response = await fetch('/run-workflow', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                if (result.error) {
+                    showToast('Error: ' + result.error, 'error');
+                } else {
+                    showToast('Workflow completed successfully', 'success');
+                    fetchCsvData();
+                    // Update generated emails
+                    const emails = result.result.generated_emails || [];
+                    const emailDiv = document.querySelector('#generatedEmails');
+                    if (emails.length === 0) {
+                        emailDiv.innerHTML = 'No emails generated';
+                    } else {
+                        emailDiv.innerHTML = emails.map(email => `
+                            <div class="mb-4 p-3 border border-gray-200 rounded-lg bg-white email-content">
+                                <p><strong>Vendor ID:</strong> ${email.vendor_id}</p>
+                                <p><strong>To:</strong> ${email.email_address}</p>
+                                <p><strong>Email:</strong></p>
+                                <pre class="text-sm">${email.email_content}</pre>
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (error) {
+                showToast('Error running workflow: ' + error, 'error');
+            } finally {
+                toggleSpinner('workflowSpinner', false);
+            }
+        }
+
+        // WebSocket for real-time updates
+        const ws = new WebSocket('ws://' + window.location.host + '/ws/updates');
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'csv') {
+                const tableBody = document.querySelector('#csvTable tbody');
+                tableBody.innerHTML = '';
+                (data.data || []).forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="border border-gray-300 p-3">${row['Vendor_ID'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Vendor_Name'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Bank_Account'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Address'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Name'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Email'] || ''}</td>
+                        <td class="border border-gray-300 p-3">${row['Phone_Number'] || ''}</td>
+                    `;
+                    tableBody.appendChild(tr);
+                    tr.classList.add('highlight-row');
+                    setTimeout(() => tr.classList.remove('highlight-row'), 2000);
+                });
+                document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
+            } else if (data.type === 'status') {
+                const statusSubmit = document.querySelector('#updateStatusSubmit');
+                statusSubmit.innerHTML = data.data.replace(/\n/g, '<br>');
+            } else if (data.type === 'status_dataset') {
+                const statusEmails = document.querySelector('#updateStatusEmails');
+                statusEmails.innerHTML = data.data.replace(/\n/g, '<br>');
+            } else if (data.type === 'error') {
+                showToast('WebSocket error: ' + data.data, 'error');
+            }
+        };
+        ws.onclose = function() {
+            showToast('WebSocket connection closed', 'error');
+        };
+
+        // Initial CSV load
+        fetchCsvData();
+    </script>
+</body>
+</html>

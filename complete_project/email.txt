@@ -1,0 +1,16 @@
+emails = 
+    [{
+        "subject": "Request to Update bank account number",
+        "from": "collinsian@yahoo.com",
+        "body": """
+        I hope you're doing well.
+
+Kindly update our bank account number to 9999000011 in your records.my vendor id is V00001
+
+Thank you for your support.
+
+
+        Best,
+        Patterson, Gallagher and Long
+        """
+    } ]
